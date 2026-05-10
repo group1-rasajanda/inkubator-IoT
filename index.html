@@ -67,13 +67,9 @@
         <div class="row align-items-center">
             <div class="col-md-6 mb-2 mb-md-0">
                 <div class="d-flex align-items-center">
-                    <label class="fw-bold me-3 text-nowrap">⏱️ Interval Grafik & Tabel Live:</label>
-                    <select id="selectInterval" class="form-select form-select-sm w-auto" onchange="ubahInterval()">
-                        <option value="60000">1 Menit</option>
-                        <option value="300000">5 Menit</option>
-                        <option value="900000">15 Menit</option>
-                        <option value="1800000">30 Menit</option>
-                    </select>
+                    <label class="fw-bold me-2 text-nowrap">⏱️ Interval Live:</label>
+                    <input type="number" id="inputInterval" class="form-control form-control-sm text-center fw-bold" style="width: 70px;" value="10" min="1" onchange="ubahInterval()">
+                    <span class="ms-2 me-3 fw-bold text-muted">Menit</span>
                 </div>
             </div>
             <div class="col-md-6 text-md-end">
@@ -93,7 +89,7 @@
         </div>
         <div class="col-md-5">
             <div class="card p-3">
-                <h5 class="mb-2">📋 Log Data Live (<span id="txt-interval-aktif">1 Menit</span>)</h5>
+                <h5 class="mb-2">📋 Log Data Live (<span id="txt-interval-aktif">10 Menit</span>)</h5>
                 <div class="table-wrapper">
                     <table class="table table-striped table-hover table-sm text-center">
                         <thead class="table-dark">
@@ -150,14 +146,14 @@
         }
     });
 
-    // ================= VARIABEL INTERVAL =================
+    // ================= VARIABEL INTERVAL (DEFAULT 10 MENIT) =================
     let lastLogTime = 0;
-    let logIntervalMs = 60000; // Default 1 Menit
+    let logIntervalMs = 600000; // 10 Menit dalam milidetik (10 * 60 * 1000)
 
     function ubahInterval() {
-        const select = document.getElementById('selectInterval');
-        logIntervalMs = parseInt(select.value);
-        document.getElementById('txt-interval-aktif').innerText = select.options[select.selectedIndex].text;
+        const inputVal = parseInt(document.getElementById('inputInterval').value) || 1;
+        logIntervalMs = inputVal * 60000; // Ubah menit ke milidetik
+        document.getElementById('txt-interval-aktif').innerText = inputVal + " Menit";
     }
 
     // ================= 3. AMBIL DATA MONITORING (LIVE) =================
@@ -239,14 +235,12 @@
 
     // ================= 5. EXPORT EXCEL (TABEL LIVE SAAT INI) =================
     function downloadCSVLive() {
-        // PERBAIKAN: Menggunakan Titik Koma (;) agar rapi per kolom
         let csv = "Waktu;Hari;Suhu (C);Kelembapan (%)\n";
         const rows = document.querySelectorAll("#tableBody tr");
         if (rows.length === 0) return alert("Tabel live saat ini masih kosong!");
         
         rows.forEach(row => {
             let cols = row.querySelectorAll("td");
-            // PERBAIKAN: Menggunakan Titik Koma (;)
             csv += `${cols[0].innerText};${cols[1].innerText};${cols[2].innerText};${cols[3].innerText}\n`;
         });
 
@@ -268,7 +262,6 @@
                 return;
             }
 
-            // PERBAIKAN: Menggunakan Titik Koma (;) agar rapi per kolom
             let csv = "Hari Penetasan;Tanggal;Waktu;Suhu (C);Kelembapan (%)\n";
 
             Object.keys(semuaHari).forEach(hariKey => {
@@ -277,7 +270,6 @@
 
                 Object.keys(rekamanHariIni).forEach(waktuKey => {
                     const d = rekamanHariIni[waktuKey];
-                    // PERBAIKAN: Menggunakan Titik Koma (;)
                     csv += `${nomorHari};${d.tanggal};${d.waktu};${d.suhu};${d.kelembapan}\n`;
                 });
             });
