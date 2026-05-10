@@ -191,7 +191,6 @@
             }
 
             // SIMPAN KE HISTORI HARIAN DI FIREBASE
-            // Pembersihan ekstra: Hapus titik, spasi, atau karakter yang dilarang Firebase sebagai Key
             const safeTimeKey = timeString.replace(/[:.#$\[\]\s]/g, '-'); 
             
             try {
@@ -205,7 +204,7 @@
                 console.error("Firebase Key Error:", err);
             }
 
-            // Update Grafik & Tabel Live Browser (Sesuai interval yang dipilih)
+            // Update Grafik & Tabel Live Browser
             if (Date.now() - lastLogTime >= logIntervalMs) {
                 lastLogTime = Date.now();
                 
@@ -217,7 +216,6 @@
                 myChart.data.datasets[0].data.push(suhu);
                 myChart.data.datasets[1].data.push(hum);
                 
-                // Batasi grafik maksimal 20 titik terakhir agar rapi
                 if(myChart.data.labels.length > 20) {
                     myChart.data.labels.shift();
                     myChart.data.datasets[0].data.shift();
@@ -241,16 +239,18 @@
 
     // ================= 5. EXPORT EXCEL (TABEL LIVE SAAT INI) =================
     function downloadCSVLive() {
-        let csv = "Waktu,Hari,Suhu (C),Kelembapan (%)\n";
+        // PERBAIKAN: Menggunakan Titik Koma (;) agar rapi per kolom
+        let csv = "Waktu;Hari;Suhu (C);Kelembapan (%)\n";
         const rows = document.querySelectorAll("#tableBody tr");
         if (rows.length === 0) return alert("Tabel live saat ini masih kosong!");
         
         rows.forEach(row => {
             let cols = row.querySelectorAll("td");
-            csv += `${cols[0].innerText},${cols[1].innerText},${cols[2].innerText},${cols[3].innerText}\n`;
+            // PERBAIKAN: Menggunakan Titik Koma (;)
+            csv += `${cols[0].innerText};${cols[1].innerText};${cols[2].innerText};${cols[3].innerText}\n`;
         });
 
-        unduhFileCSV(csv, "Data_Live_Inkubator.csv");
+        unduhFileCSV(csv, "Data_Live_Inkubator_Rapi.csv");
     }
 
     // ================= 6. EXPORT EXCEL (SELURUH DATA DARI DATABASE) =================
@@ -268,21 +268,21 @@
                 return;
             }
 
-            let csv = "Hari Penetasan,Tanggal,Waktu,Suhu (C),Kelembapan (%)\n";
+            // PERBAIKAN: Menggunakan Titik Koma (;) agar rapi per kolom
+            let csv = "Hari Penetasan;Tanggal;Waktu;Suhu (C);Kelembapan (%)\n";
 
-            // Loop untuk setiap hari (hari_1, hari_2, dst)
             Object.keys(semuaHari).forEach(hariKey => {
                 const nomorHari = hariKey.replace('hari_', '');
                 const rekamanHariIni = semuaHari[hariKey];
 
-                // Loop untuk setiap jam/waktu di hari tersebut
                 Object.keys(rekamanHariIni).forEach(waktuKey => {
                     const d = rekamanHariIni[waktuKey];
-                    csv += `${nomorHari},${d.tanggal},${d.waktu},${d.suhu},${d.kelembapan}\n`;
+                    // PERBAIKAN: Menggunakan Titik Koma (;)
+                    csv += `${nomorHari};${d.tanggal};${d.waktu};${d.suhu};${d.kelembapan}\n`;
                 });
             });
 
-            unduhFileCSV(csv, "Riwayat_Lengkap_Penetasan_Kel1.csv");
+            unduhFileCSV(csv, "Riwayat_Lengkap_Penetasan_Kel1_Rapi.csv");
             
             btn.innerText = "Seluruh Riwayat Hari (Database)";
             btn.disabled = false;
