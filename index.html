@@ -118,7 +118,6 @@
 
 <script>
     // ================= 1. KONFIGURASI FIREBASE =================
-    // GANTI DENGAN KODE FIREBASE ASLI KALIAN
     const firebaseConfig = {
         apiKey: "AIzaSyAPvaAMhccxrRedhDrpjEDZDW-WfZjPkFA", 
         authDomain: "inkubatortelur-group1.firebaseapp.com",
@@ -159,7 +158,6 @@
         const select = document.getElementById('selectInterval');
         logIntervalMs = parseInt(select.value);
         document.getElementById('txt-interval-aktif').innerText = select.options[select.selectedIndex].text;
-        alert("Interval pembaruan grafik & tabel diubah ke " + select.options[select.selectedIndex].text);
     }
 
     // ================= 3. AMBIL DATA MONITORING (LIVE) =================
@@ -192,15 +190,20 @@
                 document.getElementById('teks-lampu').className = "fs-5 text-secondary";
             }
 
-            // SIMPAN KE HISTORI HARIAN DI FIREBASE (Agar bisa diexport kapan saja)
-            // Firebase menyimpan data berdasarkan Hari -> Jam
-            const safeTimeKey = timeString.replace(/:/g, '-'); // Menghindari titik dua di key database
-            database.ref(`/riwayat_harian/hari_${hari}/${safeTimeKey}`).set({
-                tanggal: dateString,
-                waktu: timeString,
-                suhu: suhu.toFixed(1),
-                kelembapan: hum.toFixed(1)
-            });
+            // SIMPAN KE HISTORI HARIAN DI FIREBASE
+            // Pembersihan ekstra: Hapus titik, spasi, atau karakter yang dilarang Firebase sebagai Key
+            const safeTimeKey = timeString.replace(/[:.#$\[\]\s]/g, '-'); 
+            
+            try {
+                database.ref(`/riwayat_harian/hari_${hari}/${safeTimeKey}`).set({
+                    tanggal: dateString,
+                    waktu: timeString,
+                    suhu: suhu.toFixed(1),
+                    kelembapan: hum.toFixed(1)
+                });
+            } catch (err) {
+                console.error("Firebase Key Error:", err);
+            }
 
             // Update Grafik & Tabel Live Browser (Sesuai interval yang dipilih)
             if (Date.now() - lastLogTime >= logIntervalMs) {
@@ -214,7 +217,7 @@
                 myChart.data.datasets[0].data.push(suhu);
                 myChart.data.datasets[1].data.push(hum);
                 
-                // Batasi grafik maksimal 20 titik terakhir
+                // Batasi grafik maksimal 20 titik terakhir agar rapi
                 if(myChart.data.labels.length > 20) {
                     myChart.data.labels.shift();
                     myChart.data.datasets[0].data.shift();
@@ -251,7 +254,6 @@
     }
 
     // ================= 6. EXPORT EXCEL (SELURUH DATA DARI DATABASE) =================
-    // Ini menarik semua data dari hari ke-1 sampai hari terakhir langsung dari Firebase
     function downloadCSVDatabaseFull() {
         const btn = event.target;
         btn.innerText = "Mengambil data...";
@@ -268,12 +270,12 @@
 
             let csv = "Hari Penetasan,Tanggal,Waktu,Suhu (C),Kelembapan (%)\n";
 
-            // Melakukan perulangan untuk setiap hari (hari_1, hari_2, dst)
+            // Loop untuk setiap hari (hari_1, hari_2, dst)
             Object.keys(semuaHari).forEach(hariKey => {
                 const nomorHari = hariKey.replace('hari_', '');
                 const rekamanHariIni = semuaHari[hariKey];
 
-                // Melakukan perulangan untuk setiap waktu di hari tersebut
+                // Loop untuk setiap jam/waktu di hari tersebut
                 Object.keys(rekamanHariIni).forEach(waktuKey => {
                     const d = rekamanHariIni[waktuKey];
                     csv += `${nomorHari},${d.tanggal},${d.waktu},${d.suhu},${d.kelembapan}\n`;
@@ -291,7 +293,7 @@
         });
     }
 
-    // Fungsi bantuan untuk men-trigger download browser
+    // Fungsi trigger unduhan browser
     function unduhFileCSV(stringCSV, namaFile) {
         let blob = new Blob([stringCSV], { type: "text/csv;charset=utf-8;" });
         let url = window.URL.createObjectURL(blob);
