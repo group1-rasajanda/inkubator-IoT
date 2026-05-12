@@ -10,16 +10,24 @@
     
     <style>
         body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: none; border-radius: 10px; margin-bottom: 20px; }
+        .card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: none; border-radius: 10px; margin-bottom: 20px; transition: 0.3s; }
         .val-text { font-size: 2.5rem; font-weight: bold; }
         .indicator { width: 20px; height: 20px; border-radius: 50%; display: inline-block; margin-right: 10px; }
         .lamp-on { background-color: #f1c40f; box-shadow: 0 0 10px #f1c40f; }
         .lamp-off { background-color: #bdc3c7; }
         .table-wrapper { max-height: 400px; overflow-y: auto; }
         .day-counter { font-size: 1.5rem; font-weight: bold; color: #2c3e50; }
+        /* Animasi kedip untuk alarm */
+        .bg-alarm { background-color: #ffcccc !important; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.7; } }
     </style>
 </head>
 <body>
+
+<!-- Elemen Audio Alarm (Beeper) -->
+<audio id="alarmAudio" loop>
+    <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+</audio>
 
 <div class="container py-4">
     <h2 class="text-center mb-4 border-bottom pb-3">⚙️ MONITORING INKUBATOR TELUR (PRO)</h2>
@@ -39,11 +47,18 @@
         </div>
     </div>
 
+    <!-- Tombol untuk interaksi awal agar audio bisa berbunyi di browser modern -->
+    <div class="text-center mb-3">
+        <button class="btn btn-sm btn-dark" onclick="stopAlarm()">🔇 Diamkan Alarm Sementara</button>
+        <div class="small text-muted mt-1">*Pastikan klik halaman ini sekali agar suara aktif.</div>
+    </div>
+
     <div class="row">
         <div class="col-md-4">
-            <div class="card text-center p-3 border-top border-4 border-danger">
+            <div id="cardSuhu" class="card text-center p-3 border-top border-4 border-danger">
                 <h5 class="text-muted">Suhu Ruangan</h5>
                 <div class="val-text text-danger"><span id="rt-suhu">--.-</span>°C</div>
+                <div id="msgSuhu" class="badge bg-danger d-none">PERINGATAN: SUHU TIDAK NORMAL!</div>
             </div>
         </div>
         <div class="col-md-4">
@@ -74,8 +89,8 @@
             </div>
             <div class="col-md-6 text-md-end">
                 <span class="fw-bold me-2">📥 Download Data Excel:</span>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="downloadCSVLive()">Tabel Live Saat Ini</button>
-                <button class="btn btn-sm btn-success fw-bold" onclick="downloadCSVDatabaseFull()">Seluruh Riwayat Hari (Database)</button>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="downloadCSVLive()">Tabel Live</button>
+                <button class="btn btn-sm btn-success fw-bold" onclick="downloadCSVDatabaseFull()">Database Full</button>
             </div>
         </div>
     </div>
@@ -101,7 +116,7 @@
                             </tr>
                         </thead>
                         <tbody id="tableBody">
-                            </tbody>
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -146,14 +161,20 @@
         }
     });
 
-    // ================= VARIABEL INTERVAL (DEFAULT 10 MENIT) =================
+    // ================= VARIABEL SISTEM =================
     let lastLogTime = 0;
-    let logIntervalMs = 600000; // 10 Menit dalam milidetik (10 * 60 * 1000)
+    let logIntervalMs = 600000;
+    const alarmSound = document.getElementById('alarmAudio');
+    let isAlarmActive = false;
 
     function ubahInterval() {
         const inputVal = parseInt(document.getElementById('inputInterval').value) || 1;
-        logIntervalMs = inputVal * 60000; // Ubah menit ke milidetik
+        logIntervalMs = inputVal * 60000;
         document.getElementById('txt-interval-aktif').innerText = inputVal + " Menit";
+    }
+
+    function stopAlarm() {
+        alarmSound.pause();
     }
 
     // ================= 3. AMBIL DATA MONITORING (LIVE) =================
@@ -170,10 +191,29 @@
             const dateString = now.toLocaleDateString('id-ID');
             const timeString = now.toLocaleTimeString('id-ID');
 
-            // Update Angka di Layar
+            // Update Angka & Warna Alarm
             document.getElementById('rt-suhu').innerText = suhu.toFixed(1);
             document.getElementById('rt-hum').innerText = hum.toFixed(1);
             document.getElementById('rt-hari').innerText = hari;
+
+            // Logika Alarm: Nyala jika <= 34 atau >= 40
+            const cardSuhu = document.getElementById('cardSuhu');
+            const msgSuhu = document.getElementById('msgSuhu');
+
+            if (suhu <= 34.0 || suhu >= 40.0) {
+                if (!isAlarmActive) {
+                    alarmSound.play().catch(() => console.log("Menunggu interaksi user untuk audio"));
+                    isAlarmActive = true;
+                }
+                cardSuhu.classList.add('bg-alarm');
+                msgSuhu.classList.remove('d-none');
+            } else {
+                alarmSound.pause();
+                alarmSound.currentTime = 0;
+                isAlarmActive = false;
+                cardSuhu.classList.remove('bg-alarm');
+                msgSuhu.classList.add('d-none');
+            }
 
             // Update Status Lampu
             if (lampuStatus === true || lampuStatus === 1) {
@@ -186,24 +226,15 @@
                 document.getElementById('teks-lampu').className = "fs-5 text-secondary";
             }
 
-            // SIMPAN KE HISTORI HARIAN DI FIREBASE
+            // SIMPAN KE FIREBASE
             const safeTimeKey = timeString.replace(/[:.#$\[\]\s]/g, '-'); 
-            
-            try {
-                database.ref(`/riwayat_harian/hari_${hari}/${safeTimeKey}`).set({
-                    tanggal: dateString,
-                    waktu: timeString,
-                    suhu: suhu.toFixed(1),
-                    kelembapan: hum.toFixed(1)
-                });
-            } catch (err) {
-                console.error("Firebase Key Error:", err);
-            }
+            database.ref(`/riwayat_harian/hari_${hari}/${safeTimeKey}`).set({
+                tanggal: dateString, waktu: timeString, suhu: suhu.toFixed(1), kelembapan: hum.toFixed(1)
+            });
 
-            // Update Grafik & Tabel Live Browser
+            // Update Grafik & Tabel
             if (Date.now() - lastLogTime >= logIntervalMs) {
                 lastLogTime = Date.now();
-                
                 const tbody = document.getElementById('tableBody');
                 const row = `<tr><td>${timeString}</td><td>${hari}</td><td>${suhu.toFixed(1)}</td><td>${hum.toFixed(1)}</td></tr>`;
                 tbody.insertAdjacentHTML('afterbegin', row);
@@ -211,7 +242,6 @@
                 myChart.data.labels.push(timeString);
                 myChart.data.datasets[0].data.push(suhu);
                 myChart.data.datasets[1].data.push(hum);
-                
                 if(myChart.data.labels.length > 20) {
                     myChart.data.labels.shift();
                     myChart.data.datasets[0].data.shift();
@@ -222,79 +252,44 @@
         }
     });
 
-    // ================= 4. KONTROL MOTOR MANUAL =================
+    // ================= 4. KONTROL MOTOR =================
     function kontrolMotor(state) {
         database.ref('/kontrol').update({ motorManual: state })
-        .then(() => {
-            if(state) alert("Perintah PUTAR dikirim ke ESP32!");
-            else alert("Perintah STOP dikirim. Mode kembali otomatis.");
-        }).catch((error) => {
-            alert("Gagal mengirim perintah: " + error);
-        });
+        .then(() => alert(state ? "Motor Berputar!" : "Motor Berhenti (Auto Mode)"));
     }
 
-    // ================= 5. EXPORT EXCEL (TABEL LIVE SAAT INI) =================
-    function downloadCSVLive() {
-        let csv = "Waktu;Hari;Suhu (C);Kelembapan (%)\n";
-        const rows = document.querySelectorAll("#tableBody tr");
-        if (rows.length === 0) return alert("Tabel live saat ini masih kosong!");
-        
-        rows.forEach(row => {
-            let cols = row.querySelectorAll("td");
-            csv += `${cols[0].innerText};${cols[1].innerText};${cols[2].innerText};${cols[3].innerText}\n`;
-        });
-
-        unduhFileCSV(csv, "Data_Live_Inkubator_Rapi.csv");
-    }
-
-    // ================= 6. EXPORT EXCEL (SELURUH DATA DARI DATABASE) =================
-    function downloadCSVDatabaseFull() {
-        const btn = event.target;
-        btn.innerText = "Mengambil data...";
-        btn.disabled = true;
-
-        database.ref('/riwayat_harian').once('value').then((snapshot) => {
-            const semuaHari = snapshot.val();
-            if (!semuaHari) {
-                alert("Belum ada riwayat data di database!");
-                btn.innerText = "Seluruh Riwayat Hari (Database)";
-                btn.disabled = false;
-                return;
-            }
-
-            let csv = "Hari Penetasan;Tanggal;Waktu;Suhu (C);Kelembapan (%)\n";
-
-            Object.keys(semuaHari).forEach(hariKey => {
-                const nomorHari = hariKey.replace('hari_', '');
-                const rekamanHariIni = semuaHari[hariKey];
-
-                Object.keys(rekamanHariIni).forEach(waktuKey => {
-                    const d = rekamanHariIni[waktuKey];
-                    csv += `${nomorHari};${d.tanggal};${d.waktu};${d.suhu};${d.kelembapan}\n`;
-                });
-            });
-
-            unduhFileCSV(csv, "Riwayat_Lengkap_Penetasan_Kel1_Rapi.csv");
-            
-            btn.innerText = "Seluruh Riwayat Hari (Database)";
-            btn.disabled = false;
-        }).catch(err => {
-            alert("Gagal menarik data dari database: " + err);
-            btn.innerText = "Seluruh Riwayat Hari (Database)";
-            btn.disabled = false;
-        });
-    }
-
-    // Fungsi trigger unduhan browser
+    // ================= 5. EXPORT EXCEL =================
     function unduhFileCSV(stringCSV, namaFile) {
         let blob = new Blob([stringCSV], { type: "text/csv;charset=utf-8;" });
         let url = window.URL.createObjectURL(blob);
         let a = document.createElement("a");
         a.href = url;
         a.download = namaFile;
-        document.body.appendChild(a);
         a.click();
-        document.body.removeChild(a);
+    }
+
+    function downloadCSVLive() {
+        let csv = "Waktu;Hari;Suhu (C);Kelembapan (%)\n";
+        document.querySelectorAll("#tableBody tr").forEach(row => {
+            let cols = row.querySelectorAll("td");
+            csv += `${cols[0].innerText};${cols[1].innerText};${cols[2].innerText};${cols[3].innerText}\n`;
+        });
+        unduhFileCSV(csv, "Data_Live.csv");
+    }
+
+    function downloadCSVDatabaseFull() {
+        database.ref('/riwayat_harian').once('value').then((snapshot) => {
+            const data = snapshot.val();
+            if (!data) return alert("Database kosong!");
+            let csv = "Hari;Tanggal;Waktu;Suhu;Humi\n";
+            Object.keys(data).forEach(h => {
+                Object.keys(data[h]).forEach(w => {
+                    const d = data[h][w];
+                    csv += `${h};${d.tanggal};${d.waktu};${d.suhu};${d.kelembapan}\n`;
+                });
+            });
+            unduhFileCSV(csv, "Database_Full.csv");
+        });
     }
 </script>
 </body>
