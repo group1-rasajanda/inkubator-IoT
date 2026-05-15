@@ -300,3 +300,44 @@
             
             // Tanggal kita mulai penetasan (Sesuai kalender web)
             const tanggalMulaiWaktu = new Date("2026-05-11T00:00:00").getTime();
+            
+            // Kamus untuk membaca waktu tersembunyi dari Firebase
+            const PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+
+            // Loop data otomatis dari Firebase (berdasarkan urutan log ESP32)
+            Object.keys(data).forEach(key => {
+                const d = data[key];
+                if (d.waktu !== undefined) {
+                    
+                    // Ekstrak Tanggal & Waktu Asli dari Kode Unik Firebase
+                    let timestamp = 0;
+                    for (let i = 0; i < 8; i++) {
+                        timestamp = timestamp * 64 + PUSH_CHARS.indexOf(key.charAt(i));
+                    }
+                    
+                    const tglLog = new Date(timestamp);
+                    const tanggalString = tglLog.toLocaleDateString('id-ID'); // Format: DD/MM/YYYY
+                    
+                    // Hitung Hari Ke-berapa Log ini dibuat
+                    const selisih = tglLog.getTime() - tanggalMulaiWaktu;
+                    let hariAsli = Math.floor(selisih / (1000 * 60 * 60 * 24)) + 1;
+                    
+                    if (hariAsli < 1) hariAsli = 1; 
+
+                    csv += `Hari Ke-${hariAsli};${tanggalString};${d.waktu};${d.temp};${d.humi}\n`;
+                }
+            });
+
+            unduhFileCSV(csv, "Rekapan_Database_Full_Rapi.csv");
+            
+            btn.innerText = textAsli;
+            btn.disabled = false;
+        }).catch((err) => {
+            alert("Gagal mengambil data: " + err);
+            btn.innerText = textAsli;
+            btn.disabled = false;
+        });
+    }
+</script>
+</body>
+</html>
