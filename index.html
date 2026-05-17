@@ -185,7 +185,7 @@
             const lampuStatus = data.lampuStatus;
             
             // --- TRIK KALENDER OTOMATIS WEB ---
-            // Tanggal kita mulai penetasan: 11 Mei 2026 jam 00:00 (Sesuaikan jika perlu)
+            // Tanggal kita mulai penetasan: 11 Mei 2026 jam 00:00
             const tanggalMulai = new Date("2026-05-11T00:00:00");
             const sekarang = new Date();
             
@@ -224,7 +224,7 @@
             }
 
             // Update Status Lampu
-            if (lampuStatus === true || lampuStatus === 1) {
+            if (lampuStatus === true || lampuStatus === 1 || lampuStatus === "1") {
                 document.getElementById('ind-lampu').className = "indicator lamp-on";
                 document.getElementById('teks-lampu').innerText = "MENYALA";
                 document.getElementById('teks-lampu').className = "fs-5 text-warning";
@@ -280,7 +280,7 @@
         unduhFileCSV(csv, "Data_Live_Layar.csv");
     }
 
-    // Download Langsung dari Rekapan Otomatis ESP32 (/logs) - TERMASUK TANGGAL RAHASIA
+    // Download Langsung dari Rekapan Otomatis ESP32 (/logs) 
     function downloadCSVDatabaseFull() {
         const btn = document.getElementById('btnDownload');
         const textAsli = btn.innerText;
@@ -296,7 +296,8 @@
                 return;
             }
 
-            let csv = "Hari;Tanggal;Waktu;Suhu (C);Kelembapan (%)\n";
+            // TAMBAHAN: Kolom Status Pemanas dan Status Motor
+            let csv = "Hari;Tanggal;Waktu;Suhu (C);Kelembapan (%);Status Pemanas;Status Motor\n";
             
             // Tanggal kita mulai penetasan (Sesuai kalender web)
             const tanggalMulaiWaktu = new Date("2026-05-11T00:00:00").getTime();
@@ -321,14 +322,28 @@
                     // Hitung Hari Ke-berapa Log ini dibuat
                     const selisih = tglLog.getTime() - tanggalMulaiWaktu;
                     let hariAsli = Math.floor(selisih / (1000 * 60 * 60 * 24)) + 1;
-                    
                     if (hariAsli < 1) hariAsli = 1; 
 
-                    csv += `Hari Ke-${hariAsli};${tanggalString};${d.waktu};${d.temp};${d.humi}\n`;
+                    // Cek Status Pemanas
+                    let statusLampu = "-";
+                    if (d.lampuStatus !== undefined || d.lampu !== undefined) {
+                        let lampuState = d.lampuStatus !== undefined ? d.lampuStatus : d.lampu;
+                        statusLampu = (lampuState === true || lampuState === 1 || lampuState === "1") ? "MENYALA" : "MATI";
+                    }
+
+                    // Cek Status Motor
+                    let statusMotor = "-";
+                    if (d.motorStatus !== undefined || d.motor !== undefined || d.motorManual !== undefined) {
+                        let motorState = d.motorStatus !== undefined ? d.motorStatus : (d.motor !== undefined ? d.motor : d.motorManual);
+                        statusMotor = (motorState === true || motorState === 1 || motorState === "1") ? "BERPUTAR" : "DIAM";
+                    }
+
+                    // Masukkan seluruh data ke satu baris CSV
+                    csv += `Hari Ke-${hariAsli};${tanggalString};${d.waktu};${d.temp};${d.humi};${statusLampu};${statusMotor}\n`;
                 }
             });
 
-            unduhFileCSV(csv, "Rekapan_Database_Full_Rapi.csv");
+            unduhFileCSV(csv, "Rekapan_Inkubator_Lengkap.csv");
             
             btn.innerText = textAsli;
             btn.disabled = false;
