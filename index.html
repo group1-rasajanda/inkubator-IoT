@@ -223,7 +223,7 @@
                 msgSuhu.classList.add('d-none');
             }
 
-            // Update Status Lampu
+            // Update Status Lampu Live (Untuk Tampilan Web Saja)
             if (lampuStatus === true || lampuStatus === 1 || lampuStatus === "1") {
                 document.getElementById('ind-lampu').className = "indicator lamp-on";
                 document.getElementById('teks-lampu').innerText = "MENYALA";
@@ -241,118 +241,4 @@
                 const row = `<tr><td>${timeString}</td><td>Hari Ke-${hari}</td><td>${suhu.toFixed(1)}</td><td>${hum.toFixed(1)}</td></tr>`;
                 tbody.insertAdjacentHTML('afterbegin', row);
 
-                myChart.data.labels.push(timeString);
-                myChart.data.datasets[0].data.push(suhu);
-                myChart.data.datasets[1].data.push(hum);
-                if(myChart.data.labels.length > 20) {
-                    myChart.data.labels.shift();
-                    myChart.data.datasets[0].data.shift();
-                    myChart.data.datasets[1].data.shift();
-                }
-                myChart.update();
-            }
-        }
-    });
-
-    // ================= 4. KONTROL MOTOR =================
-    function kontrolMotor(state) {
-        database.ref('/kontrol').update({ motorManual: state })
-        .then(() => alert(state ? "Motor Berputar!" : "Motor Berhenti (Auto Mode)"));
-    }
-
-    // ================= 5. EXPORT EXCEL =================
-    function unduhFileCSV(stringCSV, namaFile) {
-        let blob = new Blob([stringCSV], { type: "text/csv;charset=utf-8;" });
-        let url = window.URL.createObjectURL(blob);
-        let a = document.createElement("a");
-        a.href = url;
-        a.download = namaFile;
-        a.click();
-    }
-
-    // Download tabel yang ada di layar
-    function downloadCSVLive() {
-        let csv = "Waktu;Hari;Suhu (C);Kelembapan (%)\n";
-        document.querySelectorAll("#tableBody tr").forEach(row => {
-            let cols = row.querySelectorAll("td");
-            csv += `${cols[0].innerText};${cols[1].innerText};${cols[2].innerText};${cols[3].innerText}\n`;
-        });
-        unduhFileCSV(csv, "Data_Live_Layar.csv");
-    }
-
-    // Download Langsung dari Rekapan Otomatis ESP32 (/logs) 
-    function downloadCSVDatabaseFull() {
-        const btn = document.getElementById('btnDownload');
-        const textAsli = btn.innerText;
-        btn.innerText = "Mengambil Data...";
-        btn.disabled = true;
-
-        database.ref('/logs').once('value').then((snapshot) => {
-            const data = snapshot.val();
-            if (!data) {
-                alert("Database kosong! Pastikan alat menyala minimal 10 menit agar ESP32 mengirim log pertama.");
-                btn.innerText = textAsli;
-                btn.disabled = false;
-                return;
-            }
-
-            // TAMBAHAN: Kolom Status Pemanas dan Status Motor
-            let csv = "Hari;Tanggal;Waktu;Suhu (C);Kelembapan (%);Status Pemanas;Status Motor\n";
-            
-            // Tanggal kita mulai penetasan (Sesuai kalender web)
-            const tanggalMulaiWaktu = new Date("2026-05-11T00:00:00").getTime();
-            
-            // Kamus untuk membaca waktu tersembunyi dari Firebase
-            const PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
-
-            // Loop data otomatis dari Firebase (berdasarkan urutan log ESP32)
-            Object.keys(data).forEach(key => {
-                const d = data[key];
-                if (d.waktu !== undefined) {
-                    
-                    // Ekstrak Tanggal & Waktu Asli dari Kode Unik Firebase
-                    let timestamp = 0;
-                    for (let i = 0; i < 8; i++) {
-                        timestamp = timestamp * 64 + PUSH_CHARS.indexOf(key.charAt(i));
-                    }
-                    
-                    const tglLog = new Date(timestamp);
-                    const tanggalString = tglLog.toLocaleDateString('id-ID'); // Format: DD/MM/YYYY
-                    
-                    // Hitung Hari Ke-berapa Log ini dibuat
-                    const selisih = tglLog.getTime() - tanggalMulaiWaktu;
-                    let hariAsli = Math.floor(selisih / (1000 * 60 * 60 * 24)) + 1;
-                    if (hariAsli < 1) hariAsli = 1; 
-
-                    // Cek Status Pemanas
-                    let statusLampu = "-";
-                    if (d.lampuStatus !== undefined || d.lampu !== undefined) {
-                        let lampuState = d.lampuStatus !== undefined ? d.lampuStatus : d.lampu;
-                        statusLampu = (lampuState === true || lampuState === 1 || lampuState === "1") ? "MENYALA" : "MATI";
-                    }
-
-                    // Cek Status Motor
-                    let statusMotor = "-";
-                    if (d.motorStatus !== undefined || d.motor !== undefined || d.motorManual !== undefined) {
-                        let motorState = d.motorStatus !== undefined ? d.motorStatus : (d.motor !== undefined ? d.motor : d.motorManual);
-                        statusMotor = (motorState === true || motorState === 1 || motorState === "1") ? "BERPUTAR" : "DIAM";
-                    }
-
-                    // Masukkan seluruh data ke satu baris CSV
-                    csv += `Hari Ke-${hariAsli};${tanggalString};${d.waktu};${d.temp};${d.humi};${statusLampu};${statusMotor}\n`;
-                }
-            });
-
-            unduhFileCSV(csv, "Rekapan_Inkubator_Lengkap.csv");
-            
-            btn.innerText = textAsli;
-            btn.disabled = false;
-        }).catch((err) => {
-            alert("Gagal mengambil data: " + err);
-            btn.innerText = textAsli;
-            btn.disabled = false;
-        });
-    }
-</script>
-</body>
-</html>
+                myChart.data.
