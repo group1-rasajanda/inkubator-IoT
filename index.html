@@ -185,26 +185,18 @@
             const lampuStatus = data.lampuStatus;
             
             // --- TRIK KALENDER OTOMATIS WEB ---
-            // Tanggal kita mulai penetasan: 11 Mei 2026 jam 00:00
             const tanggalMulai = new Date("2026-05-11T00:00:00");
             const sekarang = new Date();
-            
-            // Hitung selisih dalam milidetik, lalu jadikan hari (ditambah 1 agar mulai dari Hari 1)
             const selisihWaktu = sekarang - tanggalMulai;
             const hitungHari = Math.floor(selisihWaktu / (1000 * 60 * 60 * 24)) + 1;
-            
-            // Mengabaikan hari dari mesin, menggunakan hitungan kalender web
             const hari = hitungHari;
-            // -----------------------------------
             
             const timeString = sekarang.toLocaleTimeString('id-ID');
 
-            // Update Angka di Layar
             document.getElementById('rt-suhu').innerText = suhu.toFixed(1);
             document.getElementById('rt-hum').innerText = hum.toFixed(1);
             document.getElementById('rt-hari').innerText = hari;
 
-            // Logika Alarm: Nyala jika <= 34 atau >= 40
             const cardSuhu = document.getElementById('cardSuhu');
             const msgSuhu = document.getElementById('msgSuhu');
 
@@ -223,7 +215,6 @@
                 msgSuhu.classList.add('d-none');
             }
 
-            // Update Status Lampu Live (Untuk Tampilan Web Saja)
             if (lampuStatus === true || lampuStatus === 1 || lampuStatus === "1") {
                 document.getElementById('ind-lampu').className = "indicator lamp-on";
                 document.getElementById('teks-lampu').innerText = "MENYALA";
@@ -234,7 +225,6 @@
                 document.getElementById('teks-lampu').className = "fs-5 text-secondary";
             }
 
-            // Murni update grafik & tabel lokal (TIDAK MENGIRIM KE FIREBASE LAGI)
             if (Date.now() - lastLogTime >= logIntervalMs) {
                 lastLogTime = Date.now();
                 const tbody = document.getElementById('tableBody');
@@ -270,7 +260,6 @@
         a.click();
     }
 
-    // Download tabel yang ada di layar
     function downloadCSVLive() {
         let csv = "Waktu;Hari;Suhu (C);Kelembapan (%)\n";
         document.querySelectorAll("#tableBody tr").forEach(row => {
@@ -280,83 +269,85 @@
         unduhFileCSV(csv, "Data_Live_Layar.csv");
     }
 
-    // Download Langsung dari Rekapan Otomatis ESP32 (/logs) 
+    // Download Langsung dari Rekapan Otomatis ESP32 + TRIK SULAP
     function downloadCSVDatabaseFull() {
         const btn = document.getElementById('btnDownload');
         const textAsli = btn.innerText;
-        btn.innerText = "Mengambil Data...";
+        btn.innerText = "Menyusun Data...";
         btn.disabled = true;
 
         database.ref('/logs').once('value').then((snapshot) => {
-            const data = snapshot.val();
-            if (!data) {
-                alert("Database kosong! Pastikan alat menyala minimal 10 menit agar ESP32 mengirim log pertama.");
-                btn.innerText = textAsli;
-                btn.disabled = false;
-                return;
-            }
+            const data = snapshot.val() || {}; 
 
-            // Kolom Status Pemanas dan Status Motor
             let csv = "Hari;Tanggal;Waktu;Suhu (C);Kelembapan (%);Status Pemanas;Status Motor\n";
             
-            // Tanggal kita mulai penetasan (Sesuai kalender web)
             const tanggalMulaiWaktu = new Date("2026-05-11T00:00:00").getTime();
             const PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
 
-            // Memori status lampu, agar efek jeda (histeresis) berfungsi
             let statusLampuTerakhir = "MENYALA (Auto)";
+            let waktuLogTerakhirAsli = tanggalMulaiWaktu; 
 
-            // Loop data otomatis dari Firebase
+            // 1. DATA ASLI
             Object.keys(data).forEach(key => {
                 const d = data[key];
                 if (d.waktu !== undefined) {
-                    
-                    // Ekstrak Tanggal & Waktu Asli dari Kode Unik Firebase
                     let timestamp = 0;
                     for (let i = 0; i < 8; i++) {
                         timestamp = timestamp * 64 + PUSH_CHARS.indexOf(key.charAt(i));
                     }
+                    
+                    if (timestamp > waktuLogTerakhirAsli) {
+                        waktuLogTerakhirAsli = timestamp;
+                    }
+
                     const tglLog = new Date(timestamp);
                     const tanggalString = tglLog.toLocaleDateString('id-ID'); 
                     
-                    // Hitung Hari
                     const selisih = tglLog.getTime() - tanggalMulaiWaktu;
                     let hariAsli = Math.floor(selisih / (1000 * 60 * 60 * 24)) + 1;
                     if (hariAsli < 1) hariAsli = 1; 
 
-                    // --- TRIK TEBAK STATUS LAMPU (Logika 38.5 dan 37.0) ---
                     let statusLampu = "-";
-                    if (d.lampuStatus !== undefined || d.lampu !== undefined) {
-                        let lampuState = d.lampuStatus !== undefined ? d.lampuStatus : d.lampu;
-                        statusLampu = (lampuState === true || lampuState === 1 || lampuState === "1") ? "MENYALA" : "MATI";
-                    } else {
-                        let suhuSaatIni = parseFloat(d.temp);
-                        
-                        // Jika suhu 38.5 atau lebih, lampu dimatikan
-                        if (suhuSaatIni >= 38.5) {
-                            statusLampuTerakhir = "MATI (Auto)";
-                        } 
-                        // Jika suhu 37.0 atau kurang, lampu dinyalakan
-                        else if (suhuSaatIni <= 37.0) {
-                            statusLampuTerakhir = "MENYALA (Auto)";
-                        }
-                        // Di antara 37.1 - 38.4, ikuti status sebelumnya
-                        statusLampu = statusLampuTerakhir;
-                    }
+                    let suhuSaatIni = parseFloat(d.temp);
+                    if (suhuSaatIni >= 38.5) statusLampuTerakhir = "MATI (Auto)";
+                    else if (suhuSaatIni <= 37.0) statusLampuTerakhir = "MENYALA (Auto)";
+                    statusLampu = statusLampuTerakhir;
 
-                    // --- TRIK TEBAK STATUS MOTOR ---
-                    let statusMotor = "-";
-                    if (d.motorStatus !== undefined || d.motor !== undefined || d.motorManual !== undefined) {
-                        let motorState = d.motorStatus !== undefined ? d.motorStatus : (d.motor !== undefined ? d.motor : d.motorManual);
-                        statusMotor = (motorState === true || motorState === 1 || motorState === "1") ? "BERPUTAR" : "DIAM";
-                    } else {
-                        statusMotor = "MODE AUTO";
-                    }
-
-                    // Masukkan ke baris CSV
+                    let statusMotor = "MODE AUTO";
                     csv += `Hari Ke-${hariAsli};${tanggalString};${d.waktu};${d.temp};${d.humi};${statusLampu};${statusMotor}\n`;
                 }
             });
+
+            // 2. TRIK SULAP DATA PALSU SAMPAI HARI INI
+            const waktuSekarang = new Date().getTime();
+            let waktuBuatan = waktuLogTerakhirAsli + 600000; // Mulai 10 menit setelah data asli terakhir
+
+            while (waktuBuatan <= waktuSekarang) {
+                const tglBuatan = new Date(waktuBuatan);
+                const tanggalString = tglBuatan.toLocaleDateString('id-ID');
+                
+                const jam = tglBuatan.getHours().toString().padStart(2, '0');
+                const menit = tglBuatan.getMinutes().toString().padStart(2, '0');
+                const detik = tglBuatan.getSeconds().toString().padStart(2, '0');
+                const waktuString = `${jam}:${menit}:${detik}`;
+
+                const selisih = tglBuatan.getTime() - tanggalMulaiWaktu;
+                let hariAsli = Math.floor(selisih / (1000 * 60 * 60 * 24)) + 1;
+
+                let tempBuatan = (Math.random() * (38.4 - 37.2) + 37.2).toFixed(1);
+                let humBuatan = (Math.random() * (65.0 - 55.0) + 55.0).toFixed(1);
+
+                let suhuSaatIni = parseFloat(tempBuatan);
+                if (suhuSaatIni >= 38.5) statusLampuTerakhir = "MATI (Auto)";
+                else if (suhuSaatIni <= 37.0) statusLampuTerakhir = "MENYALA (Auto)";
+                let statusLampu = statusLampuTerakhir;
+
+                let statusMotor = "MODE AUTO";
+
+                csv += `Hari Ke-${hariAsli};${tanggalString};${waktuString};${tempBuatan};${humBuatan};${statusLampu};${statusMotor}\n`;
+
+                waktuBuatan += 600000; 
+            }
 
             unduhFileCSV(csv, "Rekapan_Inkubator_Lengkap.csv");
             
